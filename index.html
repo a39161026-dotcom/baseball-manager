@@ -1033,11 +1033,12 @@ select.px-input option { background: var(--panel2); }
     <div style="max-width:540px;margin:6px auto 0">
 
       <!-- 탭 -->
-      <div style="display:flex;border-bottom:2px solid var(--border);background:var(--panel2)">
+      <div style="display:flex;border-bottom:2px solid var(--border);background:var(--panel2);overflow-x:auto">
         <button class="mgr-tab on" id="tab-formation" onclick="switchMgrTab('formation')">🏟️ 포메이션</button>
-        <button class="mgr-tab" id="tab-lineup" onclick="switchMgrTab('lineup')">📋 타순</button>
+        <button class="mgr-tab" id="tab-lineup" onclick="switchMgrTab('lineup')">📋 내 타순</button>
         <button class="mgr-tab" id="tab-pitchers" onclick="switchMgrTab('pitchers')">⚾ 투수진</button>
-        <button class="mgr-tab" id="tab-morale" onclick="switchMgrTab('morale')">💬 선수 반응</button>
+        <button class="mgr-tab" id="tab-opponent" onclick="switchMgrTab('opponent')" style="color:var(--red)">🆚 상대팀</button>
+        <button class="mgr-tab" id="tab-morale" onclick="switchMgrTab('morale')">💬 반응</button>
       </div>
 
       <!-- 포메이션 뷰 -->
@@ -1069,6 +1070,35 @@ select.px-input option { background: var(--panel2); }
       <div id="panel-morale" class="mgr-panel pbox" style="padding:12px;border-top:none;display:none">
         <div style="font-family:'Press Start 2P',monospace;font-size:0.42rem;color:var(--purple);margin-bottom:10px">💬 라커룸 분위기</div>
         <div id="morale-list" style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:6px"></div>
+      </div>
+
+      <!-- 상대팀 패널 -->
+      <div id="panel-opponent" class="mgr-panel pbox" style="padding:12px;border-top:none;display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div style="font-family:'Press Start 2P',monospace;font-size:0.42rem;color:var(--red)">🆚 <span id="opp-team-name-label">상대팀</span></div>
+          <div style="font-size:0.68rem;color:var(--muted)">팀OVR <span id="opp-team-ovr" style="color:var(--gold);font-weight:700">-</span></div>
+        </div>
+        <!-- 상대 현재 투수 -->
+        <div style="margin-bottom:10px;padding:8px 10px;background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.25);border-radius:4px">
+          <div style="font-size:0.58rem;color:var(--muted);margin-bottom:6px">⚾ 현재 상대 투수</div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:36px;height:36px;border-radius:50%;background:rgba(239,68,68,0.2);border:2px solid var(--accent);display:flex;align-items:center;justify-content:center;font-size:1.1rem">⚾</div>
+            <div style="flex:1">
+              <div id="opp-pitcher-name" style="font-weight:700;font-size:0.84rem;color:var(--red)">-</div>
+              <div id="opp-pitcher-stats" style="font-size:0.63rem;color:var(--muted);margin-top:2px">-</div>
+              <div style="height:4px;background:#1e293b;margin-top:4px;border-radius:2px">
+                <div id="opp-pitcher-hp-fill" style="height:100%;width:100%;background:var(--accent);border-radius:2px;transition:width .3s"></div>
+              </div>
+            </div>
+            <div id="opp-pitcher-hp-pct" style="font-family:'Press Start 2P',monospace;font-size:0.45rem;color:var(--accent)">100%</div>
+          </div>
+        </div>
+        <!-- 상대 타순 -->
+        <div style="font-size:0.58rem;color:var(--muted);margin-bottom:5px;padding-bottom:4px;border-bottom:1px solid var(--border)">📋 상대 타순</div>
+        <div id="opp-lineup-list" style="max-height:180px;overflow-y:auto;margin-bottom:8px"></div>
+        <!-- 상대 불펜 -->
+        <div style="font-size:0.58rem;color:var(--muted);margin-bottom:5px;padding-bottom:4px;border-bottom:1px solid var(--border)">🔥 상대 불펜</div>
+        <div id="opp-bullpen-list"></div>
       </div>
     </div>
 
@@ -1310,6 +1340,247 @@ select.px-input option { background: var(--panel2); }
 // 전역 상수 (최상단 — TDZ 방지)
 // ═══════════════════════════════════════════
 const VALID_POS = ['SP','RP','C','1B','2B','3B','SS','OF','DH'];
+
+// ═══════════════════════════════════════════
+// 실제 선수 풀 (상대팀 무작위 구성용)
+// KBO + MLB 대표 선수들
+// ═══════════════════════════════════════════
+const REAL_PLAYER_POOL = {
+  // ── KBO 투수 ──
+  SP_KBO: [
+    { name:'양현종',  ovr:86, era:3.42 },
+    { name:'원태인',  ovr:87, era:3.18 },
+    { name:'안우진',  ovr:85, era:3.31 },
+    { name:'고영표',  ovr:82, era:3.78 },
+    { name:'에릭페디',ovr:88, era:2.96 },
+    { name:'코디폰세',ovr:87, era:3.05 },
+    { name:'김광현',  ovr:84, era:3.55 },
+    { name:'류현진',  ovr:83, era:3.72 },
+    { name:'최원태',  ovr:80, era:4.12 },
+    { name:'임찬규',  ovr:79, era:4.38 },
+    { name:'윤영철',  ovr:81, era:3.95 },
+    { name:'박세웅',  ovr:80, era:4.05 },
+  ],
+  RP_KBO: [
+    { name:'고우석',  ovr:87, era:2.44 },
+    { name:'조상우',  ovr:84, era:2.88 },
+    { name:'김재웅',  ovr:82, era:3.10 },
+    { name:'주권',    ovr:79, era:3.45 },
+    { name:'한승혁',  ovr:78, era:3.67 },
+    { name:'정해영',  ovr:83, era:2.72 },
+    { name:'장현식',  ovr:80, era:3.22 },
+    { name:'박치국',  ovr:78, era:3.88 },
+  ],
+  // ── KBO 야수 ──
+  C_KBO: [
+    { name:'양의지',  ovr:88, avg:.301, hr:18, rbi:72 },
+    { name:'박동원',  ovr:80, avg:.271, hr:12, rbi:51 },
+    { name:'이지영',  ovr:77, avg:.258, hr: 8, rbi:38 },
+    { name:'장성우',  ovr:76, avg:.262, hr: 6, rbi:34 },
+    { name:'유강남',  ovr:78, avg:.268, hr:10, rbi:44 },
+  ],
+  '1B_KBO': [
+    { name:'강백호',  ovr:86, avg:.312, hr:28, rbi:88 },
+    { name:'노시환',  ovr:85, avg:.298, hr:31, rbi:95 },
+    { name:'이대호',  ovr:83, avg:.285, hr:22, rbi:78 },
+    { name:'박병호',  ovr:82, avg:.271, hr:35, rbi:102 },
+    { name:'최정',    ovr:85, avg:.288, hr:29, rbi:91 },
+  ],
+  '2B_KBO': [
+    { name:'신민재',  ovr:83, avg:.304, hr: 8, rbi:52 },
+    { name:'박민우',  ovr:79, avg:.282, hr: 4, rbi:41 },
+    { name:'오지환',  ovr:81, avg:.278, hr:12, rbi:58 },
+    { name:'김혜성',  ovr:82, avg:.296, hr: 7, rbi:48 },
+    { name:'이호준',  ovr:77, avg:.261, hr: 5, rbi:36 },
+  ],
+  '3B_KBO': [
+    { name:'김도영',  ovr:95, avg:.345, hr:38, rbi:109 },
+    { name:'허경민',  ovr:79, avg:.274, hr: 9, rbi:54 },
+    { name:'황재균',  ovr:80, avg:.279, hr:14, rbi:62 },
+    { name:'전준우',  ovr:78, avg:.271, hr:11, rbi:55 },
+    { name:'송성문',  ovr:83, avg:.301, hr:16, rbi:71 },
+  ],
+  SS_KBO: [
+    { name:'박성한',  ovr:82, avg:.292, hr:11, rbi:61 },
+    { name:'이재현',  ovr:80, avg:.285, hr: 8, rbi:48 },
+    { name:'김주원',  ovr:83, avg:.298, hr:10, rbi:57 },
+    { name:'이종범',  ovr:88, avg:.331, hr:21, rbi:84 },
+    { name:'강정호',  ovr:86, avg:.315, hr:19, rbi:76 },
+  ],
+  OF_KBO: [
+    { name:'이정후',  ovr:93, avg:.349, hr:24, rbi:98 },
+    { name:'구자욱',  ovr:84, avg:.308, hr:18, rbi:79 },
+    { name:'나성범',  ovr:81, avg:.281, hr:22, rbi:86 },
+    { name:'박해민',  ovr:78, avg:.276, hr: 5, rbi:42 },
+    { name:'김재환',  ovr:85, avg:.295, hr:29, rbi:93 },
+    { name:'최형우',  ovr:83, avg:.291, hr:17, rbi:75 },
+    { name:'손아섭',  ovr:79, avg:.273, hr:12, rbi:58 },
+    { name:'문보경',  ovr:82, avg:.288, hr:15, rbi:68 },
+    { name:'박건우',  ovr:81, avg:.284, hr:13, rbi:64 },
+    { name:'홍창기',  ovr:80, avg:.279, hr: 8, rbi:51 },
+  ],
+  DH_KBO: [
+    { name:'최정',    ovr:85, avg:.288, hr:29, rbi:91 },
+    { name:'이대호',  ovr:83, avg:.285, hr:22, rbi:78 },
+    { name:'테임즈',  ovr:87, avg:.321, hr:47, rbi:140 },
+    { name:'로맥',    ovr:84, avg:.296, hr:37, rbi:113 },
+    { name:'페르난데스', ovr:86, avg:.308, hr:34, rbi:121 },
+  ],
+
+  // ── MLB 투수 ──
+  SP_MLB: [
+    { name:'Shohei Ohtani',  ovr:99, era:2.33 },
+    { name:'Tarik Skubal',   ovr:91, era:2.39 },
+    { name:'Max Fried',      ovr:89, era:2.86 },
+    { name:'Zack Wheeler',   ovr:88, era:3.07 },
+    { name:'Gerrit Cole',    ovr:88, era:3.41 },
+    { name:'Logan Webb',     ovr:87, era:3.25 },
+    { name:'Pablo Lopez',    ovr:86, era:3.49 },
+    { name:'Framber Valdez', ovr:86, era:3.45 },
+    { name:'Corbin Burnes',  ovr:88, era:2.92 },
+    { name:'Sandy Alcantara',ovr:87, era:3.07 },
+    { name:'Spencer Strider',ovr:90, era:2.67 },
+    { name:'Dylan Cease',    ovr:85, era:3.61 },
+  ],
+  RP_MLB: [
+    { name:'Edwin Diaz',     ovr:90, era:1.31 },
+    { name:'Josh Hader',     ovr:88, era:1.28 },
+    { name:'Emmanuel Clase', ovr:89, era:1.36 },
+    { name:'Devin Williams', ovr:88, era:1.53 },
+    { name:'Ryan Helsley',   ovr:87, era:1.59 },
+    { name:'Alexis Diaz',    ovr:84, era:2.93 },
+    { name:'Clay Holmes',    ovr:83, era:2.84 },
+    { name:'David Bednar',   ovr:84, era:2.62 },
+  ],
+  // ── MLB 야수 ──
+  C_MLB: [
+    { name:'Cal Raleigh',    ovr:88, avg:.232, hr:37, rbi:88 },
+    { name:'Will Smith',     ovr:86, avg:.261, hr:21, rbi:66 },
+    { name:'Jose Trevino',   ovr:79, avg:.243, hr:11, rbi:44 },
+    { name:'Adley Rutschman',ovr:87, avg:.256, hr:18, rbi:62 },
+    { name:'Sean Murphy',    ovr:85, avg:.248, hr:17, rbi:64 },
+  ],
+  '1B_MLB': [
+    { name:'Freddie Freeman',ovr:91, avg:.331, hr:29, rbi:89 },
+    { name:'Pete Alonso',    ovr:87, avg:.239, hr:46, rbi:118 },
+    { name:'Vladimir Guerrero Jr.',ovr:90, avg:.285, hr:26, rbi:76 },
+    { name:'Matt Olson',     ovr:88, avg:.241, hr:54, rbi:139 },
+    { name:'Paul Goldschmidt',ovr:87, avg:.267, hr:25, rbi:80 },
+  ],
+  '2B_MLB': [
+    { name:'Jose Altuve',    ovr:87, avg:.311, hr:16, rbi:54 },
+    { name:'Andres Gimenez', ovr:82, avg:.232, hr:12, rbi:54 },
+    { name:'Marcus Semien',  ovr:86, avg:.261, hr:26, rbi:84 },
+    { name:'Jeff McNeil',    ovr:83, avg:.274, hr:11, rbi:51 },
+    { name:'Brendan Donovan',ovr:81, avg:.275, hr: 9, rbi:48 },
+  ],
+  '3B_MLB': [
+    { name:'Jose Ramirez',   ovr:93, avg:.282, hr:29, rbi:104 },
+    { name:'Nolan Arenado',  ovr:88, avg:.272, hr:26, rbi:93 },
+    { name:'Rafael Devers',  ovr:91, avg:.279, hr:33, rbi:99 },
+    { name:'Alex Bregman',   ovr:86, avg:.262, hr:23, rbi:75 },
+    { name:'Austin Riley',   ovr:87, avg:.268, hr:37, rbi:97 },
+  ],
+  SS_MLB: [
+    { name:'Bobby Witt Jr.', ovr:94, avg:.276, hr:30, rbi:97 },
+    { name:'Gunnar Henderson',ovr:91, avg:.255, hr:28, rbi:82 },
+    { name:'Corey Seager',   ovr:90, avg:.297, hr:33, rbi:96 },
+    { name:'Trea Turner',    ovr:87, avg:.278, hr:26, rbi:76 },
+    { name:'Xander Bogaerts',ovr:86, avg:.281, hr:18, rbi:73 },
+    { name:'Francisco Lindor',ovr:90, avg:.273, hr:31, rbi:98 },
+  ],
+  OF_MLB: [
+    { name:'Aaron Judge',    ovr:97, avg:.267, hr:62, rbi:131 },
+    { name:'Ronald Acuna Jr.',ovr:95, avg:.337, hr:41, rbi:106 },
+    { name:'Juan Soto',      ovr:96, avg:.288, hr:35, rbi:109 },
+    { name:'Mookie Betts',   ovr:92, avg:.307, hr:39, rbi:107 },
+    { name:'Kyle Tucker',    ovr:91, avg:.281, hr:29, rbi:88 },
+    { name:'Corbin Carroll', ovr:88, avg:.249, hr:25, rbi:76 },
+    { name:'Julio Rodriguez',ovr:89, avg:.275, hr:32, rbi:103 },
+    { name:'Mike Trout',     ovr:91, avg:.263, hr:40, rbi:80 },
+    { name:'Yordan Alvarez', ovr:94, avg:.293, hr:31, rbi:97 },
+    { name:'Steven Kwan',    ovr:84, avg:.298, hr:10, rbi:52 },
+  ],
+  DH_MLB: [
+    { name:'Shohei Ohtani',  ovr:99, avg:.304, hr:44, rbi:95 },
+    { name:'Yordan Alvarez', ovr:94, avg:.293, hr:31, rbi:97 },
+    { name:'J.D. Martinez',  ovr:83, avg:.271, hr:22, rbi:78 },
+    { name:'Nelson Cruz',    ovr:80, avg:.261, hr:19, rbi:64 },
+    { name:'Adolis Garcia',  ovr:87, avg:.245, hr:38, rbi:107 },
+  ],
+};
+
+// 선수풀에서 포지션별 랜덤 선택
+function pickFromPool(pos, isOverseas, usedNames) {
+  // 포지션 키 결정
+  const league = isOverseas ? 'MLB' : 'KBO';
+  let key = pos + '_' + league;
+  // OF는 합쳐서 쓰기
+  const pool = REAL_PLAYER_POOL[key] || [];
+  if (!pool.length) return null;
+
+  // 이미 사용된 이름 제외
+  const available = pool.filter(p => !usedNames.has(p.name));
+  if (!available.length) return pool[Math.floor(Math.random() * pool.length)];
+  return available[Math.floor(Math.random() * available.length)];
+}
+
+// 상대팀 로스터 빌드 (실제 선수풀 기반)
+function buildOppRoster(opp, oppBaseOVR) {
+  const isOverseas = /[A-Za-z]{3,}/.test(opp) && !['드래곤즈','타이거즈','이글스','블루버드','레전드','스톰','불사조','나이츠','선더','왕조'].some(k => opp.includes(k));
+  const usedNames = new Set();
+  const posDefs = [
+    { pos:'SP',  fieldPos:'SP',  count:1 },
+    { pos:'RP',  fieldPos:'RP',  count:2 },
+    { pos:'C',   fieldPos:'C',   count:1 },
+    { pos:'1B',  fieldPos:'1B',  count:1 },
+    { pos:'2B',  fieldPos:'2B',  count:1 },
+    { pos:'3B',  fieldPos:'3B',  count:1 },
+    { pos:'SS',  fieldPos:'SS',  count:1 },
+    { pos:'OF',  fieldPos:'OF',  count:3 },
+    { pos:'DH',  fieldPos:'DH',  count:1 },
+  ];
+
+  const roster = [];
+  let idxN = 0;
+
+  posDefs.forEach(({ pos, count }) => {
+    for (let i = 0; i < count; i++) {
+      const fromPool = pickFromPool(pos, isOverseas, usedNames);
+      const isPitch = pos === 'SP' || pos === 'RP';
+
+      if (fromPool) {
+        usedNames.add(fromPool.name);
+        roster.push({
+          id: 'opp_' + (idxN++),
+          name: fromPool.name,
+          pos,
+          ovr: Math.min(99, Math.max(55,
+            fromPool.ovr + Math.floor((oppBaseOVR - 80) * 0.3) + (Math.random()*6|0) - 3
+          )),
+          hp: 100,
+          fatigue: Math.floor(Math.random() * 20),
+          stats: isPitch
+            ? { era: fromPool.era || +(3.5 + (99 - fromPool.ovr) * 0.03).toFixed(2),
+                wins: Math.floor(Math.random()*15)+3,
+                losses: Math.floor(Math.random()*12)+2,
+                k: Math.floor(Math.random()*140)+40 }
+            : { avg: fromPool.avg || +(fromPool.ovr/330).toFixed(3),
+                hr:  fromPool.hr  || Math.floor(Math.random()*25),
+                rbi: fromPool.rbi || Math.floor(Math.random()*80)+20,
+                ops: +((fromPool.avg||fromPool.ovr/330) + 0.32 + Math.random()*0.1).toFixed(3) }
+        });
+      } else {
+        // fallback: genPlayer
+        roster.push(genPlayer(isOverseas ? '해외' : '국내', pos));
+        roster[roster.length-1].id = 'opp_' + (idxN++);
+      }
+    }
+  });
+
+  return roster;
+}
+
 
 // ═══════════════════════════════════════════
 // GAME STATE
@@ -2992,8 +3263,23 @@ const Engine = {
     // HP 초기화
     G.roster.forEach(p => { p.hp = 100; });
 
+    // 상대팀 OVR 결정 (리그 순위 기반)
+    const oppTeamData = [...G.leagues.DOM, ...G.leagues.FOR].find(t => t.name === opp);
+    const oppWinPct = oppTeamData ? oppTeamData.wins / Math.max(1, oppTeamData.wins + oppTeamData.losses) : 0.5;
+    const oppBaseOVR = Math.round(65 + oppWinPct * 30);
+
+    // 실제 선수풀 기반 상대팀 로스터 생성
+    const oppRoster = buildOppRoster(opp, oppBaseOVR);
+    const oppStarterP = oppRoster.find(p => p.pos === 'SP');
+    const oppLineupPlayers = oppRoster.filter(p => p.pos !== 'SP' && p.pos !== 'RP');
+
     this.gs = {
       opponent: opp,
+      oppTeamOVR: oppBaseOVR,
+      oppRoster,
+      oppLineup: oppLineupPlayers,
+      oppCurrentPitcher: oppStarterP?.name || oppRoster[0]?.name,
+      oppBatterIdx: 0,
       inning: 1, top: true,
       outs: 0, balls: 0, strikes: 0,
       bases: [false, false, false],
@@ -3012,6 +3298,8 @@ const Engine = {
     document.getElementById('game-running').style.display = 'block';
     document.getElementById('game-result').style.display = 'none';
     document.getElementById('game-log').innerHTML = '';
+    // 상대팀 탭 초기화
+    switchMgrTab('formation');
     document.getElementById('sb-home-name').textContent = G.myTeamName.slice(0,8);
     document.getElementById('sb-away-name').textContent = opp.slice(0,8);
     initLinescoreRows(opp);
@@ -3714,7 +4002,7 @@ function substitutePitcher(newPitcherId) {
 // 감독 탭 전환
 // ═══════════════════════════════════════════
 function switchMgrTab(tab) {
-  ['formation','lineup','pitchers','morale'].forEach(t => {
+  ['formation','lineup','pitchers','morale','opponent'].forEach(t => {
     document.getElementById('tab-' + t)?.classList.toggle('on', t === tab);
     const p = document.getElementById('panel-' + t);
     if (p) { p.style.display = t === tab ? 'block' : 'none'; p.classList.toggle('on', t === tab); }
@@ -3723,6 +4011,7 @@ function switchMgrTab(tab) {
   if (tab === 'lineup')    renderIngameLineup();
   if (tab === 'pitchers')  { renderIngamePitchers(); updatePitcherHPBar(); }
   if (tab === 'morale')    renderMoralePanel();
+  if (tab === 'opponent')  renderOpponentPanel();
 }
 
 // ═══════════════════════════════════════════
@@ -4670,6 +4959,116 @@ function addGameLog(event, name, msg) {
 // 포메이션 선수 클릭 → 교체 모달 열기 (개선)
 // ═══════════════════════════════════════════
 // renderFormation 내부에서 onclick을 openPlayerAction → 모달로 변경
+
+// ═══════════════════════════════════════════
+// 상대팀 패널 렌더
+// ═══════════════════════════════════════════
+function renderOpponentPanel() {
+  const gs = Engine.gs;
+  if (!gs || !gs.oppRoster) {
+    document.getElementById('opp-lineup-list').innerHTML =
+      '<div style="color:var(--muted);font-size:0.75rem;padding:8px">경기 중에 확인할 수 있습니다</div>';
+    return;
+  }
+
+  // 헤더
+  document.getElementById('opp-team-name-label').textContent = gs.opponent;
+  document.getElementById('opp-team-ovr').textContent = gs.oppTeamOVR;
+
+  // 현재 상대 투수
+  const oppP = gs.oppRoster.find(p => p.name === gs.oppCurrentPitcher) || gs.oppRoster[0];
+  const oppHP = oppP?.hp ?? 100;
+  const oppHPColor = oppHP > 60 ? '#4ade80' : oppHP > 30 ? '#f5a623' : '#ef4444';
+  document.getElementById('opp-pitcher-name').textContent = oppP?.name || '-';
+  document.getElementById('opp-pitcher-stats').textContent =
+    oppP ? `${oppP.pos} · OVR ${oppP.ovr} · ERA ${oppP.stats?.era||'-'} · 피로 ${oppP.fatigue||0}%` : '-';
+  const hpFill = document.getElementById('opp-pitcher-hp-fill');
+  const hpPct  = document.getElementById('opp-pitcher-hp-pct');
+  if (hpFill) { hpFill.style.width = oppHP+'%'; hpFill.style.background = oppHPColor; }
+  if (hpPct)  { hpPct.textContent = oppHP+'%'; hpPct.style.color = oppHPColor; }
+
+  // 상대 타순
+  const lineupEl = document.getElementById('opp-lineup-list');
+  lineupEl.innerHTML = gs.oppLineup.map((p, i) => {
+    const isCurrent = i === gs.oppBatterIdx % gs.oppLineup.length;
+    const statStr = `AVG ${p.stats?.avg||'-'} · HR ${p.stats?.hr||0} · RBI ${p.stats?.rbi||0}`;
+    return `<div style="
+      display:flex;align-items:center;gap:8px;padding:6px 8px;
+      border-bottom:1px solid rgba(255,255,255,0.04);font-size:0.72rem;
+      background:${isCurrent ? 'rgba(239,68,68,0.08)' : 'transparent'};
+    ">
+      <span style="font-family:'Press Start 2P',monospace;font-size:0.36rem;
+        color:${isCurrent ? 'var(--red)' : 'var(--muted)'};width:14px">${i+1}</span>
+      <span style="width:28px;padding:1px 4px;background:var(--panel3);
+        font-family:'Press Start 2P',monospace;font-size:0.3rem;
+        color:var(--blue);text-align:center">${p.pos}</span>
+      <span style="flex:1;font-weight:${isCurrent?'700':'400'};
+        color:${isCurrent ? 'var(--red)' : 'var(--text)'}">${p.name}</span>
+      <span style="font-size:0.63rem;color:${isCurrent?'var(--gold)':'var(--muted)'}">OVR ${p.ovr}</span>
+      ${isCurrent ? '<span style="font-size:0.8rem">🏏</span>' : ''}
+    </div>`;
+  }).join('');
+
+  // 상대 불펜
+  const bullpenEl = document.getElementById('opp-bullpen-list');
+  const bullpen = gs.oppRoster.filter(p => p.pos === 'RP');
+  bullpenEl.innerHTML = bullpen.map(p => {
+    const hp = p.hp ?? 100;
+    const hpC = hp > 60 ? '#4ade80' : hp > 30 ? '#f5a623' : '#ef4444';
+    const used = gs.oppUsedPitchers?.includes(p.id);
+    return `<div style="
+      display:flex;align-items:center;gap:8px;padding:6px 8px;
+      border-bottom:1px solid rgba(255,255,255,0.04);font-size:0.72rem;
+      opacity:${used ? '0.4' : '1'};
+    ">
+      <span style="width:28px;padding:1px 4px;background:rgba(239,68,68,0.15);
+        font-family:'Press Start 2P',monospace;font-size:0.3rem;color:var(--red);text-align:center">RP</span>
+      <span style="flex:1;color:${used ? 'var(--muted)' : 'var(--text)'}">
+        ${p.name} ${used ? '<span style="color:var(--muted)">(소진)</span>' : ''}
+      </span>
+      <div style="width:50px;height:4px;background:#1e293b;border-radius:2px;overflow:hidden">
+        <div style="height:100%;width:${hp}%;background:${hpC};border-radius:2px"></div>
+      </div>
+      <span style="font-size:0.62rem;color:${hpC};width:30px;text-align:right">${hp}%</span>
+    </div>`;
+  }).join('') || '<div style="color:var(--muted);font-size:0.72rem;padding:6px 8px">불펜 투수 없음</div>';
+}
+
+// ── 상대 투수 HP도 플레이마다 감소 ──
+// 상대가 수비(우리 공격)일 때 상대 투수 체력 감소
+function drainOppPitcherHP() {
+  const gs = Engine.gs;
+  if (!gs || !gs.oppRoster) return;
+  const oppP = gs.oppRoster.find(p => p.name === gs.oppCurrentPitcher);
+  if (!oppP) return;
+  oppP.hp = Math.max(0, (oppP.hp ?? 100) - rand(2, 7));
+  oppP.fatigue = Math.min(100, (oppP.fatigue || 0) + rand(1, 4));
+
+  // 상대 투수도 HP 낮으면 자동 교체 (AI)
+  if (oppP.hp <= 20) {
+    const bullpen = gs.oppRoster.filter(p =>
+      p.pos === 'RP' && !gs.oppUsedPitchers?.includes(p.id)
+    );
+    if (bullpen.length) {
+      const newP = bullpen[0];
+      gs.oppUsedPitchers = gs.oppUsedPitchers || [];
+      gs.oppUsedPitchers.push(oppP.id);
+      gs.oppCurrentPitcher = newP.name;
+      newP.hp = Math.max(50, 100 - (newP.fatigue||0));
+
+      // 중계 로그에 상대 투수 교체 표기
+      const logEl = document.getElementById('game-log');
+      if (logEl) {
+        const div = document.createElement('div');
+        div.style.cssText = 'padding:5px 10px;border-bottom:1px solid #0f2447;font-size:0.72rem;color:#f87171';
+        const inn = gs.inning || '?';
+        div.innerHTML = '<span style="color:#4ade8044;font-size:.72rem">['+inn+'R'+(gs.top?'▲':'▼')+']</span> 🔄 <strong>'+gs.opponent+'</strong> 투수 교체: '+oppP.name+' → '+newP.name;
+        logEl.prepend(div);
+      }
+    }
+  }
+}
+
 
 // ═══════════════════════════════════════════
 // PWA - 게임 저장/불러오기 (localStorage)
